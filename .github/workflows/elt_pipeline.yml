@@ -39,7 +39,7 @@ jobs:
       #--- 🟢 ÉTAPE BRONZE : INGESTION ---
     # Charge le JSON du bucket dans la table bronze_products
       - name: 1. Ingestion API vers Bronze
-        run: python ingestion/load_products.py
+        run: python big_data/03_evaluation/mon_projet/ingestion/load_products.py
 
       # --- ⚪ ÉTAPE SILVER : TRANSFORMATION ---
     # Nettoie les données : bronze_products -> silver_products
