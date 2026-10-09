@@ -1,0 +1,54 @@
+# Fichier: .github/workflows/elt_pipeline.yml
+name: Pipeline ELT Quotidien
+
+# Le pipeline se lance manuellement, ou tous les jours à minuit
+on:
+  workflow_dispatch: # lancement manuel depuis l'onglet Actions
+  schedule:
+    - cron: "0 0 * * *" # Run  Tous les jours à minuit
+
+jobs:
+  run-elt:
+    runs-on: ubuntu-latest # machine virtuelle Linux fournie par GitHub
+    
+    # Permissions requises pour utiliser Workload Identity Federation (OIDC) avec GitHub Actions
+    permissions:
+      contents: 'read'
+      id-token: 'write'
+
+    steps:
+    # Récupère le code du dépôt sur la machine
+      - name: Récupérer le code (Checkout)
+        uses: actions/checkout@v4
+
+    # Connexion à Google Cloud
+      - name: Authentification Google Cloud (WIF)
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: 'projects/833312929773/locations/global/workloadIdentityPools/github-pool/providers/github-provider'
+          service_account: 'github-actions-elt@lasalle-big-data.iam.gserviceaccount.com'
+
+    # Installe Python puis la librairie dlt 
+      - name: Installation de Python et dlt
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: |
+          uv add "dlt[bigquery,gs]"         
+
+      #--- 🟢 ÉTAPE BRONZE : INGESTION ---
+    # Charge le JSON du bucket dans la table bronze_products
+      - name: 1. Ingestion API vers Bronze
+        run: python ingestion/load_products.py
+
+      # --- ⚪ ÉTAPE SILVER : TRANSFORMATION ---
+    # Nettoie les données : bronze_products -> silver_products
+      - name: 2. ransformation Bronze vers Silver
+        run: bq query --use_legacy_sql=false < transformations/silver.sql
+
+
+      # --- 🟡 ÉTAPE GOLD : AGRÉGATION ---
+    # Calcule les indicateurs par catégorie : silver_products -> gold_category_metrics
+      - name: 3. Agrégation Silver vers Gold
+        run: bq query --use_legacy_sql=false < transformations/gold.sql
+
